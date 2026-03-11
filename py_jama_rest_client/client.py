@@ -1386,9 +1386,9 @@ class JamaClient:
             is_folder: Optional boolean indicating if this is a folder.
             parent_id: Optional integer ID of the parent folder.
 
-        Returns: 201 if successful
-
+        Returns: integer API ID of the newly created project or folder.
         """
+        
         body = {
             "projectKey": key,
             "isFolder": is_folder,
@@ -1406,7 +1406,7 @@ class JamaClient:
             py_jama_rest_client_logger.error(err)
             raise APIException(str(err))
         JamaClient.__handle_response_status(response)
-        return response.status_code
+        return response.json()['meta']['id']
 
     def post_item_tag(self, item_id, tag_id):
         """
@@ -1494,7 +1494,7 @@ class JamaClient:
             py_jama_rest_client_logger.error(err)
             raise APIException(str(err))
         JamaClient.__handle_response_status(response)
-        return response.status_code
+        return response.json()['meta']['id']
 
     def post_relationship(self, from_item: int, to_item: int, relationship_type=None):
         """

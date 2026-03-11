@@ -8,7 +8,8 @@
 # set JAMA_CLIENT_ID=XXX
 # set JAMA_CLIENT_SECRET=XXX
 
-# $ python JamaGetItems.py
+# $ python SaveJamaItems.py
+# v1.1 - 2026.03.11 Added attachement file download functionality. If an item is of type "ATTACHMENT", the script will attempt to download the file using the Jama API and save it to the local "json" folder. If the file is not found (e.g., it has been deleted), the script will skip it and print a message. For other errors during download, it will print a detailed error message with a stack trace for troubleshooting.
 #
 import time
 from datetime import datetime, date, time, timedelta
@@ -87,6 +88,7 @@ def main():
         json.dump(rel_types, f, indent=4, sort_keys=True, separators=(',', ': '), ensure_ascii=False)
     print(f"relationshipTypesを {output_filename} に保存しました。")
 
+    #project_info={'id':182}
     for project_info in ret_json:
         projectID = project_info["id"]
         ret_json = jama_access.get_project(projectID)
@@ -121,5 +123,44 @@ def main():
             json.dump(relations_list, f, indent=4, sort_keys=True, separators=(',', ': '), ensure_ascii=False)  
         print(f"relationsを {output_filename} に保存しました。")
 
+        # アイテムの中からattachmentアイテムを探して、ファイルをダウンロードする。
+        for item in items_list:
+            if item["itemType"] == 22: # "ATTACHMENT"
+                
+                # JamaのAPIを使ってattachmentファイルを取得
+                try:
+                    attachment_id = item["id"]
+                    print(f"Downloading attachment ID {attachment_id} using Jama API...")
+                    
+                    # get_attachments_fileメソッドを使用してファイルを取得
+                    file_content = jama_access.get_attachments_file(attachment_id)
+                    
+                    # ファイル名を直接使用（item['fileName']から取得）
+                    safe_filename = item.get('fileName', f'attachment_{attachment_id}')
+                    
+                    filepath = os.path.join(".\\json", safe_filename)
+                    
+                    # ファイルを保存
+                    with open(filepath, 'wb') as f:
+                        f.write(file_content)
+                    
+                    print(f"Successfully downloaded: {filepath} ({len(file_content)} bytes)")
+                        
+                except Exception as e:
+                    error_str = str(e).lower()
+                    
+                    # 404/not found エラーは軽くスキップ
+                    if "404" in error_str or "not found" in error_str:
+                        print(f"Skipping {item["id"]} (file not found - likely deleted)")
+                    else:
+                        # その他のエラーは目立つ表示
+                        print(f"🚨 ===== DOWNLOAD ERROR =====")
+                        print(f"❌ Failed to download attachment {item['id']} ")
+                        print(f"🔍 Error: {e}")
+                        print(f"📋 This may require attention:")                    
+                        # エラーの詳細を表示
+                        import traceback
+                        print(f"Error details: {traceback.format_exc()}")
+                    
 if __name__ == '__main__':
     main()
