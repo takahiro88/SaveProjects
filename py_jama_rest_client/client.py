@@ -912,6 +912,25 @@ class JamaClient:
         child_items = self.__get_all(resource_path,  allowed_results_per_page=allowed_results_per_page)
         return child_items
 
+    def get_testgroups(self, test_plan_id, allowed_results_per_page=None):
+        """This method will return all test groups associated with the specified test plan. Test groups will be returned
+        as a list of json objects."""
+
+        if allowed_results_per_page == None:
+            allowed_results_per_page = self.__allowed_results_per_page
+        resource_path = 'testplans/' + str(test_plan_id) + '/testgroups'
+        testgroup_data = self.__get_all(resource_path,  allowed_results_per_page=allowed_results_per_page)
+        return testgroup_data
+
+    def get_testgroup_testcases(self, test_plan_id,test_group_id, allowed_results_per_page=None):
+        """This method will return all test cases associated with the specified test group. Test cases will be returned
+        as a list of json objects."""
+        if allowed_results_per_page == None:
+            allowed_results_per_page = self.__allowed_results_per_page
+        resource_path = 'testplans/' + str(test_plan_id) + '/testgroups/' + str(test_group_id) + '/testcases'
+        testcase_data = self.__get_all(resource_path,  allowed_results_per_page=allowed_results_per_page)
+        return testcase_data
+
     def get_testruns(self, test_cycle_id, allowed_results_per_page=None):
         """This method will return all test runs associated with the specified test cycle.  Test runs will be returned
         as a list of json objects."""
@@ -1196,7 +1215,39 @@ class JamaClient:
             raise APIException(str(err))
         JamaClient.__handle_response_status(response)
         return response.status_code
+    def patch_testrun(self, testrun_id, status: str):
+        """
+        This method will patch a test run with the specified status.
 
+        Args:
+            testrun_id: The API ID of the test run to patch
+            status: The test run status to patch the test run with. Valid values are "PASSED", "FAILED", "BLOCKED", "NOT_RUN"
+
+        Returns: The response status code
+
+        """
+        resource_path = 'testruns/' + str(testrun_id)
+        headers = {'Content-Type': 'application/json',
+                   'Accept': 'application/json'
+                   }
+        body = {
+            'op': 'replace',
+            
+            'value': status
+        }
+        data = json.dumps(body)
+
+        # Make the API Call
+        try:
+            response = self.__core.patch(resource_path, data=data, headers=headers)
+        except CoreException as err:
+            py_jama_rest_client_logger.error(err)
+            raise APIException(str(err))
+
+        # validate response
+        JamaClient.__handle_response_status(response)
+        return response.json()['meta']['status']
+    
     def patch_item(self, item_id, patches):
         """
         This method will patch an item.
@@ -1295,6 +1346,75 @@ class JamaClient:
         JamaClient.__handle_response_status(response)
         return response.json()['meta']['id']
 
+    def post_testplan(self, project_id, name, description):
+        """ 
+        This method will create a new Test Plan. 
+
+        Args:
+            project_id (int): The API_ID of the project to create the test plan in.
+            name (str): The name you would like to set for the new Test Plan
+            description (str): A description for the test plan
+        """
+        resource_path = 'testplans'
+        body = {
+            'project': project_id,
+            'fields': {
+                'name': name,
+                'description': description
+            }
+        }
+        headers = {'content-type': 'application/json'}
+        try:
+            response = self.__core.post(resource_path, data=json.dumps(body), headers=headers)
+        except CoreException as err:
+            py_jama_rest_client_logger.error(err)
+            raise APIException(str(err))
+        JamaClient.__handle_response_status(response)
+        return response.json()['meta']['id']
+
+    def post_testgroup(self, testplan_id, name):
+        """ 
+        This method will create a new Test Group. 
+
+        Args:
+            testplan_id (int): The API_ID of the test plan to create the test group in.
+            name (str): The name you would like to set for the new Test Group
+        """
+        resource_path = 'testplans/' + str(testplan_id) + '/testgroups'
+        body = {
+                'name': name
+        }
+        headers = {'content-type': 'application/json'}
+        try:
+            response = self.__core.post(resource_path, data=json.dumps(body), headers=headers)
+        except CoreException as err:
+            py_jama_rest_client_logger.error(err)
+            raise APIException(str(err))
+        JamaClient.__handle_response_status(response)
+        return response.json()['meta']['id']
+
+    def post_testgroup_testcase(self, testplan_id, testgroup_id, testcase_id ):
+        """ 
+        This method will add test cases to a test group. 
+
+        Args:
+            testplan_id (int): The API_ID of the test plan the test group is in.
+            testgroup_id (int): The API_ID of the test group to add test cases to.
+            testcase_id (int): The API_ID of the test case to be added to the test group.
+        """
+        resource_path = 'testplans/' + str(testplan_id) + '/testgroups/' + str(testgroup_id) + '/testcases'
+        body = {
+            'testCase': testcase_id
+        }
+        headers = {'content-type': 'application/json'}
+        try:
+            response = self.__core.post(resource_path, data=json.dumps(body), headers=headers)
+        except CoreException as err:
+            py_jama_rest_client_logger.error(err)
+            raise APIException(str(err))
+        JamaClient.__handle_response_status(response)
+        return response.status_code
+
     def post_testplans_testcycles(self, testplan_id, testcycle_name, start_date, end_date, testgroups_to_include=None,
                                   testrun_status_to_include=None):
         """
@@ -1390,12 +1510,13 @@ class JamaClient:
         """
         
         body = {
-            "projectKey": key,
             "isFolder": is_folder,
             "fields": {
                 "name": name
             }
         }
+        if key is not None:
+            body['projectKey'] = key
         if parent_id is not None:
             body['parent'] = parent_id
         resource_path = 'projects/'
@@ -1455,7 +1576,7 @@ class JamaClient:
         JamaClient.__handle_response_status(response)
         return response.json()['meta']['id']
 
-    def post_item_type(self, key, display,displayPlural, description="",widgets=[],category=None):
+    def post_item_type(self, key, display,displayPlural, description="", image="", widgets=[],category=None):
         """
         Create a new item type in Jama Connect.
         Args:
@@ -1463,6 +1584,7 @@ class JamaClient:
             display: The display name for the new item type.
             displayPlural: The plural display name for the new item type.
             description: The description for the new item type.
+            image: The image for the new item type.
             widgets: Optional list of widgets for the new item type.
             category: Optional category for the new item type.
 
@@ -1482,6 +1604,7 @@ class JamaClient:
             "display": display,
             "displayPlural": displayPlural,
             "description": description,
+            "image": image,
             "widgets": processed_widgets,
         }
         if category is not None:
@@ -1495,6 +1618,64 @@ class JamaClient:
             raise APIException(str(err))
         JamaClient.__handle_response_status(response)
         return response.json()['meta']['id']
+
+    def post_item_type_field(self,
+            item_type_id:int, 
+            name:str, 
+            label:str, 
+            field_type:str, 
+            readOnly:bool=False, 
+            readOnlyAllowApiOverwrite:bool=False,
+            required:bool=False, 
+            triggersuspect:bool=True,
+            synchronized:bool=False,
+            picklist:int=None,
+            textType:str=None,
+            infotip:str=None): 
+        """
+        Create a new field in an item type in Jama Connect.
+        Args:
+            name: The name for the new item type field.
+            label: The label for the new item type field.
+            field_type: The type for the new item type field.
+            readOnly: Whether the field is read-only.
+            readOnlyAllowApiOverwrite: Whether the field allows API overwrite.
+            required: Whether the field is required.
+            triggersuspect: Whether the field triggers suspension.
+            synchronized: Whether the field is synchronized.
+            picklist: The picklist ID for the field.
+            textType: The text type for the field.
+            infotip: The infotip for the field.
+
+        Returns: 201 if successful
+
+        """
+        
+        body = {
+            "name": name,
+            "label": label,
+            "fieldType": field_type,
+            "readOnly": readOnly,
+            "readOnlyAllowApiOverwrite": readOnlyAllowApiOverwrite,
+            "required": required,
+            "triggersuspect": triggersuspect,
+            "synchronized": synchronized,
+        }
+        if picklist is not None:
+            body["pickList"] = picklist  # Fixed: Changed from "picklist" to "pickList"
+        if textType is not None:
+            body["textType"] = textType
+        if infotip is not None:
+            body["infotip"] = infotip
+        resource_path = 'itemtypes/' + str(item_type_id) + '/fields'
+        headers = {'content-type': 'application/json'}
+        try:
+            response = self.__core.post(resource_path, data=json.dumps(body), headers=headers)
+        except CoreException as err:
+            py_jama_rest_client_logger.error(err)
+            raise APIException(str(err))
+        JamaClient.__handle_response_status(response)
+        return response.status_code
 
     def post_relationship(self, from_item: int, to_item: int, relationship_type=None):
         """
@@ -1582,6 +1763,67 @@ class JamaClient:
         }
 
         resource_path = 'projects/' + str(project_id) + '/attachments'
+        headers = {'content-type': 'application/json'}
+        try:
+            response = self.__core.post(resource_path, data=json.dumps(body), headers=headers)
+        except CoreException as err:
+            py_jama_rest_client_logger.error(err)
+            raise APIException(str(err))
+        JamaClient.__handle_response_status(response)
+        return response.json()['meta']['id']
+
+    def post_picklist(self, name: str, description: str, type=0):
+        """
+
+        Args:
+            name: The name of the picklist
+            description: The description of the picklist
+            type: The type of the picklist (default is 0, which represents a standard picklist)
+
+        Returns: The integer ID of the newly created picklist.
+
+        """
+        body = {
+            "name": name,
+            "description": description,
+            "type": type
+        }
+        resource_path = 'picklists/'
+        headers = {'content-type': 'application/json'}
+        try:
+            response = self.__core.post(resource_path, data=json.dumps(body), headers=headers)
+        except CoreException as err:
+            py_jama_rest_client_logger.error(err)
+            raise APIException(str(err))
+        JamaClient.__handle_response_status(response)
+        return response.json()['meta']['id']
+
+    def post_picklist_option(self, picklist_id: int, name: str, description: str, sort_order: int,defaultflg: bool=False, value: str=None, color: str=None):
+        """
+
+        Args:
+            name: The name of the picklist option
+            description: The description of the picklist option
+            value: The value of the picklist option
+            color: The color of the picklist option
+            sort_order: The sort order of the picklist option
+            defaultflg: Boolean flag indicating if this is the default option (default is False)
+
+        Returns: The integer ID of the newly created picklist option.
+
+        """
+        body = {
+            "name": name,
+            "description": description,
+            "sortOrder": sort_order,
+            "default": defaultflg,
+            "type":1
+        }
+        if value is not None:
+            body['value'] = value
+        if color is not None:
+            body['color'] = color
+        resource_path = 'picklists/' + str(picklist_id) + '/options'
         headers = {'content-type': 'application/json'}
         try:
             response = self.__core.post(resource_path, data=json.dumps(body), headers=headers)
